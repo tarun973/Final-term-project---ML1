@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy.stats import zscore
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
@@ -36,7 +37,7 @@ print("Categorical Columns:", categorical_columns)
 
 df_encoded = pd.get_dummies(airlines, columns=categorical_columns, drop_first=True)
 
-X = df_encoded.drop(columns=[target])  # Attributes
+X = df_encoded.drop(columns=[target])
 y = df_encoded[target]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -50,4 +51,9 @@ importances = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_im
 
 sns.barplot(x='Importance', y='Feature', data=importances.head(10))
 plt.title('Top 10 Feature Importances from Random Forest')
+plt.show()
+
+cov_matrix = df_encoded.cov()
+sns.heatmap(cov_matrix, cmap='coolwarm', annot=False)
+plt.title('Covariance Matrix Heatmap')
 plt.show()
