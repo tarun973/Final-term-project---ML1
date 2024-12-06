@@ -2,16 +2,15 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-import warnings
 import statsmodels.api as sm
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve, precision_recall_fscore_support, mean_squared_error, accuracy_score
-from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import RandomForestClassifier, BaggingClassifier, AdaBoostClassifier, GradientBoostingClassifier, StackingClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, StackingClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.decomposition import PCA, TruncatedSVD
@@ -22,8 +21,6 @@ from sklearn.utils import resample
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from ydata_profiling import ProfileReport
 from wordcloud import WordCloud
-from sklearnex import patch_sklearn
-from xgboost import XGBClassifier
 from scipy.stats import zscore
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import label_binarize
@@ -32,30 +29,19 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
 from sklearn.neighbors import NearestNeighbors
 from mlxtend.frequent_patterns import apriori, association_rules
-
-import tensorflow as tf
-
-physical_devices = tf.config.list_physical_devices('GPU')
-if physical_devices:
-    for gpu in physical_devices:
-        tf.config.experimental.set_memory_growth(gpu, True)
-    print("Available GPU(s):", physical_devices)
-else:
-    print("No GPU detected.")
-
-
-# Disable warnings
+import warnings
 warnings.filterwarnings("ignore")
 
-# Patching sklearn for optimization
-patch_sklearn()
+from datetime import datetime
 
-# TensorFlow GPU info
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+def log_timestamp(message):
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{current_time}] {message}")
+
+log_timestamp("Starting the project execution...")
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
-
 
 
 #----------------------------------------------------------------------------------
@@ -174,16 +160,25 @@ plt.show()
 #__________________________________________________________________________________
 
 
+X = cleaned_airlines.drop(columns=['fare'])
+y = cleaned_airlines['fare']
+
+if isinstance(X, np.ndarray):
+    feature_names = cleaned_airlines.drop(columns=['fare']).columns
+else:
+    feature_names = X.columns
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True, random_state=5805)
 
 rf = RandomForestRegressor(n_estimators=100, random_state=5805)
 rf.fit(X_train, y_train)
-X_cleaned_df = pd.DataFrame(X_cleaned)
+
 importances = rf.feature_importances_
-feature_names = X_cleaned_df.columns
+
 importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
 
 importance_df = importance_df.sort_values(by='Importance', ascending=False)
+
 print(importance_df)
 
 plt.figure(figsize=(10, 8))
@@ -203,6 +198,7 @@ eliminated_features_rf = importance_df[importance_df['Importance'] < threshold][
 
 print("\nEliminated Features based on Random Forest:", eliminated_features_rf)
 print("\nFinal Selected Features based on Random Forest:", selected_features_rf)
+
 X_selected = X[selected_features_rf]
 
 
@@ -292,19 +288,45 @@ plt.show()
 #__________________________________________________________________________________
 
 
-z_scores = np.abs(zscore(X))
-threshold = 3
-outliers = (z_scores > threshold).any(axis=1)
+# z_scores = np.abs(zscore(X))
+# threshold = 3
+# outliers = (z_scores > threshold).any(axis=1)
+#
+# X_cleaned = X[~outliers]
+#
+# print(f"Number of outliers detected: {np.sum(outliers)}")
+# print(f"Shape of data after outlier removal: {X_cleaned.shape}")
+#
+# sns.countplot(data=df_cleaned, x='fare')
+# plt.title('Distribution of Target Variable')
+# plt.show()
 
-X_cleaned = X[~outliers]
 
-print(f"Number of outliers detected: {np.sum(outliers)}")
-print(f"Shape of data after outlier removal: {X_cleaned.shape}")
+scaler = StandardScaler()
+df_new_scaled = scaler.fit_transform(cleaned_airlines)
 
-sns.countplot(data=df_cleaned, x='fare')
-plt.title('Distribution of Target Variable')
+eps = 0.5
+min_samples = 5
+
+imputer = SimpleImputer(strategy='mean')
+cleaned_imputed = imputer.fit_transform(df_new_scaled)
+
+dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+cluster_labels = dbscan.fit_predict(cleaned_imputed)
+
+outliers = cluster_labels == -1
+
+outlier_cleaned = cleaned_airlines[~outliers]
+
+plt.figure(figsize=(12, 6))
+sns.histplot(data=outlier_cleaned, x='fare', kde=True, bins=50)
+plt.title('Distribution of Target Variable After Outlier Removal')
+plt.xticks(rotation=45)
+plt.tight_layout()
 plt.show()
 
+print(f"Number of outliers detected: {np.sum(outliers)}")
+print(f"Shape of data after outlier removal: {outlier_cleaned.shape}")
 
 #----------------------------------------------------------------------------------
 # Binning and Resampling
@@ -416,13 +438,6 @@ print(metrics_table)
 
 
 #----------------------------------------------------------------------------------
-# T-Test
-#__________________________________________________________________________________
-
-
-print(model.summary())
-
-#----------------------------------------------------------------------------------
 # F-Test
 #__________________________________________________________________________________
 
@@ -432,29 +447,32 @@ print(model.conf_int(alpha=0.05))
 
 
 #----------------------------------------------------------------------------------
-# Backward Stepwise Regression
+# Backward Stepwise Regression and T-test analysis
 #__________________________________________________________________________________
 
 
-def backward_elimination(X, y, significance_level=0.25):
+def backward_elimination(X, y, significance_level=0.0005):
+
     if isinstance(X, np.ndarray):
         X = pd.DataFrame(X)
 
     X_with_const = sm.add_constant(X)
 
-    feature_names = X.columns.tolist()
-    feature_names_with_const = ['Intercept'] + feature_names
+    feature_names = ['Intercept'] + X.columns.tolist()
 
-    combined_data = pd.concat([pd.DataFrame(X_with_const), pd.Series(y)], axis=1).replace([np.inf, -np.inf],
-                                                                                          np.nan).dropna()
+    X_clean = X_with_const.values
+    y_clean = y.values if isinstance(y, pd.Series) else y
 
-    X_clean = combined_data.iloc[:, :-1].values
-    y_clean = combined_data.iloc[:, -1].values
+    mask = ~np.isnan(X_clean).any(axis=1) & ~np.isinf(X_clean).any(axis=1) & ~np.isnan(y_clean) & ~np.isinf(y_clean)
+    X_clean = X_clean[mask]
+    y_clean = y_clean[mask]
 
-    if X_clean.shape[1] == 0:
-        raise ValueError("No valid features left after cleaning data")
+    if X_clean.shape[0] == 0 or X_clean.shape[1] == 0:
+        raise ValueError("No valid data available after cleaning")
 
     model = sm.OLS(y_clean, X_clean).fit()
+
+    eliminated_features = []
 
     while True:
         p_values = model.pvalues[1:]
@@ -465,45 +483,35 @@ def backward_elimination(X, y, significance_level=0.25):
         max_p_value = max(p_values)
         if max_p_value > significance_level:
             excluded_feature_index = np.argmax(p_values)
-
-            print(
-                f"Excluding feature: {feature_names_with_const[excluded_feature_index + 1]} with p-value: {max_p_value}")
+            excluded_feature_name = feature_names[excluded_feature_index + 1]
 
             X_clean = np.delete(X_clean, excluded_feature_index + 1, axis=1)
-            feature_names_with_const.pop(excluded_feature_index + 1)
+            eliminated_features.append(feature_names.pop(excluded_feature_index + 1))
+
+            print(f"Excluding feature: {excluded_feature_name} with p-value: {max_p_value}")
 
             model = sm.OLS(y_clean, X_clean).fit()
         else:
             break
 
+    remaining_features = feature_names[1:]
     print("Final Adjusted R-squared:", model.rsquared_adj)
-    return model
+    print("Remaining features after backward elimination:", remaining_features)
+    print("Excluded features during backward elimination:", eliminated_features)
 
+    return model, remaining_features
 
-final_model = backward_elimination(X_train, y_train)
+final_model, remaining_features = backward_elimination(X_train, y_train, significance_level=0.0005)
+
 print(final_model.summary())
+
+
 
 
 
 #----------------------------------------------------------------------------------
 # Phase 3
 #__________________________________________________________________________________
-
-
-# if isinstance(X, np.ndarray):
-#     X = pd.DataFrame(X)
-#
-# sample_size = 125000
-# if len(X) > sample_size:
-#     sampled_indices = X.sample(n=sample_size, random_state=5805).index
-#     X = X.loc[sampled_indices]
-#     y = y.loc[sampled_indices]
-#
-# print(f"Dataset downsampled to {len(X)} observations.")
-#
-# print(f"Length of X: {len(X)}")
-# print(f"Length of y: {len(y)}")
-
 
 
 le = LabelEncoder()
@@ -610,6 +618,10 @@ def display_results_table(results):
 display_results_table(results)
 
 
+#----------------------------------------------------------------------------------
+# Decision Tree
+#__________________________________________________________________________________
+
 
 def decision_tree_classifier():
     param_grid_pre_pruning = {
@@ -650,6 +662,10 @@ def decision_tree_classifier():
     evaluate_model(y_test, y_pred_post, "Post-Pruned Decision Tree", y_prob=y_prob_post, model=best_tree)
 
 
+#----------------------------------------------------------------------------------
+# Logistic Regression
+#__________________________________________________________________________________
+
 
 def logistic_regression_classifier():
     param_grid = {
@@ -666,7 +682,36 @@ def logistic_regression_classifier():
     evaluate_model(y_test, y_pred, "Logistic Regression", y_prob=y_prob, model=lr.best_estimator_)
 
 
+#----------------------------------------------------------------------------------
+# KNN
+#__________________________________________________________________________________
+
+
 def knn_classifier():
+    print("\n--- Finding Optimal K using Elbow Method ---")
+    k_values = range(1, 21)
+    accuracies = []
+
+    for k in k_values:
+        knn = KNeighborsClassifier(n_neighbors=k)
+        knn.fit(X_train, y_train)
+        y_pred = knn.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        accuracies.append(accuracy)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(k_values, accuracies, marker='o', linestyle='--', color='b')
+    plt.title("Elbow Method for Optimal K")
+    plt.xlabel("Number of Neighbors (K)")
+    plt.ylabel("Accuracy")
+    plt.grid()
+    plt.xticks(k_values)
+    plt.show()
+
+    optimal_k = k_values[np.argmax(accuracies)]
+    print(f"Optimal K based on Elbow Method: {optimal_k}")
+
+    print("\n--- Performing GridSearchCV for KNN ---")
     param_grid = {
         'n_neighbors': list(range(1, 21)),
         'weights': ['uniform', 'distance'],
@@ -676,23 +721,15 @@ def knn_classifier():
     knn = GridSearchCV(KNeighborsClassifier(), param_grid, cv=cv, scoring='accuracy')
     knn.fit(X_train, y_train)
     print(f"Best Parameters for K-Nearest Neighbors: {knn.best_params_}")
+
     y_pred = knn.predict(X_test)
     y_prob = knn.predict_proba(X_test)
     evaluate_model(y_test, y_pred, "K-Nearest Neighbors", y_prob=y_prob, model=knn.best_estimator_)
 
 
-# def svm_classifier():
-#     param_grid = {
-#         'C': [0.1, 1, 10],
-#         'kernel': ['linear', 'poly', 'rbf'],
-#         'gamma': ['scale', 'auto']
-#     }
-#     svm = GridSearchCV(SVC(probability=True, random_state=5805), param_grid, cv=cv, scoring='accuracy')
-#     svm.fit(X_train, y_train)
-#     print(f"Best Parameters for SVM: {svm.best_params_}")
-#     y_pred = svm.predict(X_test)
-#     y_prob = svm.predict_proba(X_test)  # Probabilities for ROC AUC
-#     evaluate_model(y_test, y_pred, "SVM", y_prob=y_prob, model=svm.best_estimator_)
+#----------------------------------------------------------------------------------
+# Support Vector Machine
+#__________________________________________________________________________________
 
 
 def svm_classifier():
@@ -708,6 +745,11 @@ def svm_classifier():
     evaluate_model(y_test, y_pred, "SVM", y_prob=y_prob, model=svm.best_estimator_)
 
 
+#----------------------------------------------------------------------------------
+# Naive Bayes
+#__________________________________________________________________________________
+
+
 def naive_bayes_classifier():
     param_grid = {
         'var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6]
@@ -716,8 +758,13 @@ def naive_bayes_classifier():
     nb.fit(X_train, y_train)
     print(f"Best Parameters for Naive Bayes: {nb.best_params_}")
     y_pred = nb.predict(X_test)
-    y_prob = nb.predict_proba(X_test)  # Probabilities for ROC AUC
+    y_prob = nb.predict_proba(X_test)
     evaluate_model(y_test, y_pred, "Naive Bayes", y_prob=y_prob, model=nb.best_estimator_)
+
+
+#----------------------------------------------------------------------------------
+# Random Forest
+#__________________________________________________________________________________
 
 
 def random_forest_classifier():
@@ -776,6 +823,11 @@ def random_forest_classifier():
     evaluate_model(y_test, y_pred_stack, "Stacking Classifier", y_prob=y_prob_stack, model=stack.best_estimator_)
 
 
+#----------------------------------------------------------------------------------
+# Neural Networks
+#__________________________________________________________________________________
+
+
 def neural_network_classifier():
     param_grid = {
         'hidden_layer_sizes': [(50,), (100,), (50, 50)],
@@ -808,7 +860,6 @@ print(comparison_table)
 #__________________________________________________________________________________
 
 
-
 new_data = cleaned_airlines
 
 clustering_data = new_data.drop(columns=['nsmiles'])
@@ -822,6 +873,10 @@ clustering_data = clustering_data[valid_indices]
 scaler = StandardScaler()
 scaled_data = scaler.fit_transform(numerical_data)
 
+
+#----------------------------------------------------------------------------------
+# K-Means Clustering
+#__________________________________________________________________________________
 
 
 def kmeans_clustering(scaled_data, original_data):
@@ -868,6 +923,10 @@ def kmeans_clustering(scaled_data, original_data):
 clustered_data_kmeans = kmeans_clustering(scaled_data, clustering_data)
 
 
+#----------------------------------------------------------------------------------
+# DBSCAN
+#__________________________________________________________________________________
+
 
 def dbscan_clustering(scaled_data, original_data):
     print("\n--- DBSCAN Clustering ---")
@@ -902,6 +961,10 @@ def dbscan_clustering(scaled_data, original_data):
 
 clustered_data_dbscan = dbscan_clustering(scaled_data, clustering_data)
 
+
+#----------------------------------------------------------------------------------
+# Association Rule Mining
+#__________________________________________________________________________________
 
 
 def association_rule_mining(input_data, min_support=0.001, min_confidence=0.05):
@@ -941,6 +1004,5 @@ def association_rule_mining(input_data, min_support=0.001, min_confidence=0.05):
         print("No association rules found")
 
     return frequent_itemsets, rules
-
 
 frequent_itemsets, rules = association_rule_mining(input_data=new_data, min_support=0.001, min_confidence=0.05)
