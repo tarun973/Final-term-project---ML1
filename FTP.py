@@ -460,7 +460,7 @@ print(f"\nF-statistic: {model.fvalue}, p-value: {model.f_pvalue}")
 # Confidence Interval Analysis
 #__________________________________________________________________________________
 
-print("\nConfidence Interval Analysis:",model.conf_int(alpha=0.05))
+print("\nConfidence Interval Analysis:\n",model.conf_int(alpha=0.05))
 
 
 #----------------------------------------------------------------------------------
