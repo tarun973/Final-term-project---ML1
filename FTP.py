@@ -1,3 +1,11 @@
+#----------------------------------------------------------------------------------
+# Final Term Project
+#__________________________________________________________________________________
+
+#----------------------------------------------------------------------------------
+# Import Packages
+#__________________________________________________________________________________
+
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -43,6 +51,9 @@ log_timestamp("Starting the project execution...")
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
+#----------------------------------------------------------------------------------
+# Phase 1
+#__________________________________________________________________________________
 
 #----------------------------------------------------------------------------------
 # Reading the data
@@ -449,7 +460,7 @@ print(f"\nF-statistic: {model.fvalue}, p-value: {model.f_pvalue}")
 # Confidence Interval Analysis
 #__________________________________________________________________________________
 
-print("\n",model.conf_int(alpha=0.05))
+print("\nConfidence Interval Analysis:",model.conf_int(alpha=0.05))
 
 
 #----------------------------------------------------------------------------------
@@ -493,8 +504,7 @@ def backward_elimination(X, y, significance_level=0.0001):
 
             X_clean = np.delete(X_clean, excluded_feature_index + 1, axis=1)
             eliminated_features.append(feature_names.pop(excluded_feature_index + 1))
-
-            print(f"\nExcluding feature: {excluded_feature_name} with p-value: {max_p_value}")
+            # print(f"\nExcluding feature: {excluded_feature_name} with p-value: {max_p_value}")
 
             model = sm.OLS(y_clean, X_clean).fit()
         else:
