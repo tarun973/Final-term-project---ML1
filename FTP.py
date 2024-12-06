@@ -241,7 +241,7 @@ plt.legend()
 plt.show()
 
 n_components_selected = np.argmax(cumulative_variance_ratio >= 0.95) + 1
-print(f"Number of components explaining 95% variance: {n_components_selected}")
+print(f"\nNumber of components explaining 95% variance: {n_components_selected}")
 
 X_reduced = svd.transform(X_scaled)[:, :n_components_selected]
 
@@ -443,7 +443,13 @@ print(metrics_table)
 
 
 print(f"\nF-statistic: {model.fvalue}, p-value: {model.f_pvalue}")
-print(model.conf_int(alpha=0.05))
+
+
+#----------------------------------------------------------------------------------
+# Confidence Interval Analysis
+#__________________________________________________________________________________
+
+print("\n",model.conf_int(alpha=0.05))
 
 
 #----------------------------------------------------------------------------------
@@ -451,7 +457,7 @@ print(model.conf_int(alpha=0.05))
 #__________________________________________________________________________________
 
 
-def backward_elimination(X, y, significance_level=0.0005):
+def backward_elimination(X, y, significance_level=0.0001):
 
     if isinstance(X, np.ndarray):
         X = pd.DataFrame(X)
@@ -488,20 +494,20 @@ def backward_elimination(X, y, significance_level=0.0005):
             X_clean = np.delete(X_clean, excluded_feature_index + 1, axis=1)
             eliminated_features.append(feature_names.pop(excluded_feature_index + 1))
 
-            print(f"Excluding feature: {excluded_feature_name} with p-value: {max_p_value}")
+            print(f"\nExcluding feature: {excluded_feature_name} with p-value: {max_p_value}")
 
             model = sm.OLS(y_clean, X_clean).fit()
         else:
             break
 
     remaining_features = feature_names[1:]
-    print("Final Adjusted R-squared:", model.rsquared_adj)
-    print("Remaining features after backward elimination:", remaining_features)
+    print("\nFinal Adjusted R-squared:", model.rsquared_adj)
+    print("\nRemaining features after backward elimination:", remaining_features)
     print("Excluded features during backward elimination:", eliminated_features)
 
     return model, remaining_features
 
-final_model, remaining_features = backward_elimination(X_train, y_train, significance_level=0.0005)
+final_model, remaining_features = backward_elimination(X_train, y_train, significance_level=0.0001)
 
 print(final_model.summary())
 
@@ -567,7 +573,7 @@ def evaluate_model(y_true, y_pred, model_name, y_prob=None, model=None):
         n_classes = y_true_binarized.shape[1]
 
         fpr, tpr, _ = roc_curve(y_true_binarized.ravel(), y_prob.ravel())
-        roc_auc = roc_auc_score(y_true_binarized, y_prob, average='micro', multi_class='ovr')
+        roc_auc = roc_auc_score(y_true_binarized, y_prob, average='weighted', multi_class='ovr')
 
         plt.figure(figsize=(10, 8))
         plt.plot(fpr, tpr, label=f"Micro-average ROC Curve (AUC = {roc_auc:.2f})")
