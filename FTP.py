@@ -576,7 +576,7 @@ def evaluate_model(y_true, y_pred, model_name, y_prob=None, model=None):
         roc_auc = roc_auc_score(y_true_binarized, y_prob, average='weighted', multi_class='ovr')
 
         plt.figure(figsize=(10, 8))
-        plt.plot(fpr, tpr, label=f"Micro-average ROC Curve (AUC = {roc_auc:.2f})")
+        plt.plot(fpr, tpr, label=f"Weighted average ROC Curve (AUC = {roc_auc:.2f})")
         plt.plot([0, 1], [0, 1], 'k--', label="Random Classifier")
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
